@@ -118,8 +118,6 @@ def dir_threshold(img, sobel_kernel=3, thresh=(0, np.pi/2)):
     # 3) Take the absolute value of the x and y gradients
     # 4) Use np.arctan2(abs_sobely, abs_sobelx) to calculate the direction of the gradient
     absgraddir = np.arctan2(np.absolute(sobely), np.absolute(sobelx))
-    plt.imshow(absgraddir)
-    plt.imshow(gray)
 
     # 5) Create a binary mask where direction thresholds are met
     binary_output =  np.zeros_like(absgraddir)
@@ -245,7 +243,8 @@ def full_search(binary_warped, visualization):
     # Create empty lists to receive left and right lane pixel indices
     left_lane_inds = []
     right_lane_inds = []
-    count=0;
+    countl=0;
+    countr=0;
     # Step through the windows one by one
     for window in range(nwindows):
         # Identify window boundaries in x and y (and right and left)
@@ -271,8 +270,11 @@ def full_search(binary_warped, visualization):
             leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
         if len(good_right_inds) > minpix:
             rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
-        if len(good_left_inds) == 0 or len(good_right_inds) == 0:
-            count=count+1
+        if len(good_left_inds) == 0: 
+            countl=countl+1
+        if len(good_right_inds) == 0:
+            countr=countr+1
+
        
         
     
@@ -292,7 +294,7 @@ def full_search(binary_warped, visualization):
     righty = nonzeroy[right_lane_inds]
 
     # Fit a second order polynomial to each
-    if count >= 6:
+    if countl >= 6 or countr >=6 :
         return False,False,False
     left_fit = np.polyfit(lefty, leftx, 2)
     right_fit = np.polyfit(righty, rightx, 2)
@@ -307,8 +309,6 @@ def full_search(binary_warped, visualization):
         out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
         out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
         # plt.subplot(1,2,1)
-        plt.imshow(out_img)
-        # plt.imshow(binary_warped)
         plt.plot(left_fitx, ploty, color='yellow')
         plt.plot(right_fitx, ploty, color='yellow')
         plt.xlim((0, frame_width / input_scale))
@@ -321,7 +321,7 @@ def full_search(binary_warped, visualization):
 
 
 
-def measure_lane_curvature(ploty, leftx, rightx, visualization=True):
+def measure_lane_curvature(ploty, leftx, rightx, visualization=False):
 
     leftx = leftx[::-1]  # Reverse to match top-to-bottom in y
     rightx = rightx[::-1]  # Reverse to match top-to-bottom in y
@@ -392,8 +392,11 @@ def compute_car_offcenter(ploty, left_fitx, right_fitx, undist):
 
 def tracker(binary_sub, ploty, visualization):
 
-    left_fit, right_fit = window_search(left_lane.prev_poly, right_lane.prev_poly, binary_sub, margin=100/input_scale, visualization=visualization)
-
+    left_fit, right_fit,check = window_search(left_lane.prev_poly, right_lane.prev_poly, binary_sub, margin=100/input_scale, visualization=visualization)
+    if check == False:
+        left_lane.detected = False
+        right_lane.detected = False
+        return 
     left_fitx = left_fit[0] * ploty**2 + left_fit[1] * ploty + left_fit[2]
     right_fitx = right_fit[0] * ploty**2 + right_fit[1] * ploty + right_fit[2]
 
@@ -417,7 +420,7 @@ def tracker(binary_sub, ploty, visualization):
 
 
 
-def window_search(left_fit, right_fit, binary_warped, margin=100, visualization=True):
+def window_search(left_fit, right_fit, binary_warped, margin=100, visualization=False):
     # Assume you now have a new warped binary image
     # from the next frame of video (also called "binary_warped")
     # It's easier to find line pixels with windows search
@@ -433,7 +436,10 @@ def window_search(left_fit, right_fit, binary_warped, margin=100, visualization=
     lefty = nonzeroy[left_lane_inds]
     rightx = nonzerox[right_lane_inds]
     righty = nonzeroy[right_lane_inds]
-
+    if len(leftx) == 0 or len(lefty) == 0 or len(rightx) == 0 or len(righty) == 0: 
+        left_lane.detected=False
+        return False,False,False
+            
     # Fit a second order polynomial to each
     left_fit = np.polyfit(lefty, leftx, 2)
     right_fit = np.polyfit(righty, rightx, 2)
@@ -448,7 +454,6 @@ def window_search(left_fit, right_fit, binary_warped, margin=100, visualization=
         out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
         out_img = out_img.astype('uint8')
         window_img = np.zeros_like(out_img)
-        plt.imshow(out_img)
         # Color in left and right line pixels
         out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
         out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
@@ -466,7 +471,6 @@ def window_search(left_fit, right_fit, binary_warped, margin=100, visualization=
         cv2.fillPoly(window_img, np.int_([left_line_pts]), (0,255, 0))
         cv2.fillPoly(window_img, np.int_([right_line_pts]), (0,255, 0))
         result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
-        plt.imshow(result)
         plt.plot(left_fitx, ploty, color='yellow')
         plt.plot(right_fitx, ploty, color='yellow')
         plt.xlim((0, frame_width / input_scale))
@@ -474,4 +478,4 @@ def window_search(left_fit, right_fit, binary_warped, margin=100, visualization=
 
         plt.show()
 
-    return left_fit, right_fit
+    return left_fit, right_fit,True
